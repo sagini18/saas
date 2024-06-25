@@ -1,0 +1,32 @@
+syntax = "proto3";
+
+package proto;
+
+option go_package = "github.com/sagini18/saas/proto";
+
+service Proxy {
+  rpc Subscribe(SubscriptionRequest) returns (SubscriptionResponse);
+  rpc StreamCommands(stream InitialRequest) returns (stream Response);
+}
+
+message SubscriptionRequest {
+  string agent_id = 1;
+  string queue = 2;
+}
+
+message SubscriptionResponse {
+  string message = 1;
+}
+
+message InitialRequest {
+  string agent_id = 1;
+  Command command = 2;
+}
+
+message Command {
+  string command = 1;
+}
+
+message Response {
+  string result = 1;
+}
