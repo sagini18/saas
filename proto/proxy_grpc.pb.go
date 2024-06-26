@@ -2,7 +2,7 @@
 // versions:
 // - protoc-gen-go-grpc v1.4.0
 // - protoc             v5.27.1
-// source: proto/proxy.proto
+// source: proxy.proto
 
 package proto
 
@@ -177,5 +177,5 @@ var Proxy_ServiceDesc = grpc.ServiceDesc{
 			ClientStreams: true,
 		},
 	},
-	Metadata: "proto/proxy.proto",
+	Metadata: "proxy.proto",
 }
