@@ -5,6 +5,7 @@ import (
 	"log"
 	"net"
 	"sync"
+	"time"
 
 	pb "github.com/sagini18/saas/proto"
 	"github.com/sirupsen/logrus"
@@ -22,6 +23,7 @@ type server struct {
 	mu            sync.Mutex
 }
 
+// ✅
 func validateToken(ctx context.Context) bool {
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
@@ -37,6 +39,7 @@ func validateToken(ctx context.Context) bool {
 	return token[0] == "valid-token"
 }
 
+// ✅
 func (s *server) Subscribe(ctx context.Context, req *pb.SubscriptionRequest) (*pb.SubscriptionResponse, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -64,13 +67,14 @@ func (s *server) StreamCommands(stream pb.Proxy_StreamCommandsServer) error {
 	s.mu.Lock()
 	s.clients[agentID] = stream
 	s.mu.Unlock()
-
+	// ⬆️✅
 	// Keep the stream open
 	for {
 		cmd, err := stream.Recv()
 		if err != nil {
 			return err
 		}
+		logrus.Infof("All:%s", cmd.Command)
 		log.Printf("Received command: %s", cmd.Command.Command)
 	}
 }
@@ -109,34 +113,48 @@ func (s *server) startConsuming() {
 	}
 	defer ch.Close()
 
-	for queue := range s.subscriptions {
-		go func(queue string) {
-			msgs, err := ch.Consume(
-				queue, // queue
-				"",    // consumer
-				false, // auto-ack (disable auto-ack for manual ack)
-				false, // exclusive
-				false, // no-local
-				false, // no-wait
-				nil,   // args
-			)
-			if err != nil {
-				log.Fatalf("Failed to register a consumer: %s", err)
-			}
-
-			for msg := range msgs {
-				s.mu.Lock()
-				for _, agentID := range s.subscriptions[queue] {
-					if client, exists := s.clients[agentID]; exists {
-						if err := client.Send(&pb.Response{Result: string(msg.Body)}); err == nil {
-							msg.Ack(false)
-						} else {
-							msg.Nack(false, true) // requeue the message if send fails
+	for {
+		for queue := range s.subscriptions {
+			go func(queue string) {
+				_, err = ch.QueueDeclare(
+					"k8s-1-command", // name
+					true,            // durable
+					false,           // delete when unused
+					false,           // exclusive
+					false,           // no-wait
+					nil,             // arguments
+				)
+				if err != nil {
+					log.Fatalf("%s: %s", "Failed to declare a queue", err)
+				}
+				msgs, err := ch.Consume(
+					queue, // queue
+					"",    // consumer tag
+					false, // auto-ack
+					false, // exclusive
+					false, // no-local
+					false, // no-wait
+					nil,   // args
+				)
+				if err != nil {
+					log.Printf("Failed to register a consumer for queue %s: %s", queue, err)
+					return
+				}
+				for msg := range msgs {
+					for _, agentID := range s.subscriptions[queue] {
+						if client, exists := s.clients[agentID]; exists {
+							if err := client.Send(&pb.Response{Result: string(msg.Body)}); err == nil {
+								msg.Ack(false)
+							} else {
+								log.Printf("Failed to send message to client %s: %s", agentID, err)
+								msg.Nack(false, true) // requeue the message if send fails
+							}
 						}
 					}
 				}
-				s.mu.Unlock()
-			}
-		}(queue)
+			}(queue)
+		}
+		// Prevent busy looping by adding a sleep or other control mechanism
+		time.Sleep(1 * time.Second)
 	}
 }

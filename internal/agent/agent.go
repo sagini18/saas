@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"time"
@@ -14,12 +15,9 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
 )
 
 func main() {
-	// Subscribe to the queue
 	agentID := "unique-agent-id"
 	queue := "k8s-1-command"
 
@@ -63,12 +61,13 @@ func runAgent(agentID string, queue string) error {
 
 	initialReq := pb.InitialRequest{
 		AgentId: agentID,
-		Command: &pb.Command{Command: ""},
+		Command: &pb.Command{Command: "why"},
 	}
 	if err := stream.Send(&initialReq); err != nil {
 		logrus.Errorf("could not send initial request: %v", err)
 		return err
 	}
+	// ⬆️✅
 
 	for {
 		in, err := stream.Recv()
@@ -76,23 +75,8 @@ func runAgent(agentID string, queue string) error {
 			logrus.Errorf("Failed to receive a command: %v", err)
 			return err
 		}
-		logrus.Infof("Received command: %s", in.Result)
-
-		config, err := rest.InClusterConfig()
-		if err != nil {
-			logrus.Errorf("Failed to create in-cluster config: %v", err)
-			return err
-		}
-
-		clientset, err := kubernetes.NewForConfig(config)
-		logrus.Info(clientset)
-		if err != nil {
-			logrus.Errorf("Failed to create clientset: %s", err)
-			return err
-		}
-
-		// Execute the command using clientset
-		log.Printf("Executing command: %s", in.Result)
+		fmt.Println("commandId:", in.CommandID)
+		logrus.Info("Received command: ", in.Result, in.RoutingKey)
 
 		response := types.CommandResponse{
 			Response:   "command executed successfully",
@@ -106,6 +90,7 @@ func runAgent(agentID string, queue string) error {
 			logrus.Errorf("Failed to marshal response: %v", err)
 			return err
 		}
+		fmt.Println("response: ", string(respBytes))
 
 		_, err = http.Post("http://localhost:5050/api/v1/responses", "application/json", bytes.NewBuffer(respBytes))
 		if err != nil {
