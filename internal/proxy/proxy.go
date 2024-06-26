@@ -23,7 +23,6 @@ type server struct {
 	mu            sync.Mutex
 }
 
-// ✅
 func validateToken(ctx context.Context) bool {
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
@@ -39,7 +38,6 @@ func validateToken(ctx context.Context) bool {
 	return token[0] == "valid-token"
 }
 
-// ✅
 func (s *server) Subscribe(ctx context.Context, req *pb.SubscriptionRequest) (*pb.SubscriptionResponse, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -67,7 +65,7 @@ func (s *server) StreamCommands(stream pb.Proxy_StreamCommandsServer) error {
 	s.mu.Lock()
 	s.clients[agentID] = stream
 	s.mu.Unlock()
-	// ⬆️✅
+
 	// Keep the stream open
 	for {
 		cmd, err := stream.Recv()
@@ -154,7 +152,6 @@ func (s *server) startConsuming() {
 				}
 			}(queue)
 		}
-		// Prevent busy looping by adding a sleep or other control mechanism
 		time.Sleep(1 * time.Second)
 	}
 }

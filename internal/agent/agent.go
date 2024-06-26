@@ -67,7 +67,6 @@ func runAgent(agentID string, queue string) error {
 		logrus.Errorf("could not send initial request: %v", err)
 		return err
 	}
-	// ⬆️✅
 
 	for {
 		in, err := stream.Recv()
@@ -75,12 +74,12 @@ func runAgent(agentID string, queue string) error {
 			logrus.Errorf("Failed to receive a command: %v", err)
 			return err
 		}
-		fmt.Println("commandId:", in.CommandID)
+		fmt.Println("commandId:", in.CommandID) // ❌
 		logrus.Info("Received command: ", in.Result, in.RoutingKey)
 
 		response := types.CommandResponse{
 			Response:   "command executed successfully",
-			CommandID:  in.CommandID,
+			CommandID:  in.CommandID, // ❌
 			RoutingKey: queue,
 		}
 
