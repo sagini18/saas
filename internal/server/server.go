@@ -5,23 +5,12 @@ import (
 	"net/http"
 
 	"github.com/sagini18/saas/internal/rabbitmq"
+	"github.com/sagini18/saas/internal/types"
 	"github.com/sirupsen/logrus"
 )
 
-type CommandMessage struct {
-	Command    string `json:"command"`
-	CommandID  string `json:"commandID"`
-	RoutingKey string `json:"routingKey"`
-}
-
-type CommandResponse struct {
-    Response   string `json:"response"`
-	CommandID  string `json:"commandID"`
-    RoutingKey string `json:"routingKey"`
-}
-
 func commandHandler(w http.ResponseWriter, r *http.Request) {
-	var cmdMsg CommandMessage
+	var cmdMsg types.CommandMessage
 
 	err := json.NewDecoder(r.Body).Decode(&cmdMsg)
 	if err != nil {
@@ -42,18 +31,18 @@ func commandHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func responseHandler(w http.ResponseWriter, r *http.Request) {
-    var respMsg CommandResponse
+	var respMsg types.CommandResponse
 
-    err := json.NewDecoder(r.Body).Decode(&respMsg)
-    if err != nil {
-        http.Error(w, "Invalid request payload", http.StatusBadRequest)
-        return
-    }
+	err := json.NewDecoder(r.Body).Decode(&respMsg)
+	if err != nil {
+		http.Error(w, "Invalid request payload", http.StatusBadRequest)
+		return
+	}
 
-    logrus.Infof("Received response: %s for command ID: %s with routing key: %s", respMsg.Response, respMsg.CommandID, respMsg.RoutingKey)
+	logrus.Infof("Received response: %s for command ID: %s with routing key: %s", respMsg.Response, respMsg.CommandID, respMsg.RoutingKey)
 
-    w.WriteHeader(http.StatusOK)
-    w.Write([]byte("Response received successfully"))
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("Response received successfully"))
 }
 
 func Start() {

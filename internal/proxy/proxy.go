@@ -7,8 +7,12 @@ import (
 	"sync"
 
 	pb "github.com/sagini18/saas/proto"
+	"github.com/sirupsen/logrus"
 	"github.com/streadway/amqp"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 )
 
 type server struct {
@@ -38,16 +42,16 @@ func (s *server) Subscribe(ctx context.Context, req *pb.SubscriptionRequest) (*p
 	defer s.mu.Unlock()
 
 	if !validateToken(ctx) {
-        return nil, grpc.Errorf(grpc.Code(403), "Forbidden")
-    }
+		return nil, status.Errorf(codes.PermissionDenied, "Forbidden")
+	}
 
+	logrus.Info("Valid subscription request")
 	if _, exists := s.subscriptions[req.Queue]; !exists {
 		s.subscriptions[req.Queue] = []string{}
 	}
 	s.subscriptions[req.Queue] = append(s.subscriptions[req.Queue], req.AgentId)
 	return &pb.SubscriptionResponse{Message: "Subscribed successfully"}, nil
 }
-
 
 func (s *server) StreamCommands(stream pb.Proxy_StreamCommandsServer) error {
 	// Extract agent ID from the first received message
@@ -76,6 +80,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 	}
+	logrus.Info("Server started on port 50051")
 
 	s := grpc.NewServer()
 	server := &server{

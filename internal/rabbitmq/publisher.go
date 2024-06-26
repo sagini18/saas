@@ -1,6 +1,9 @@
 package rabbitmq
 
 import (
+	"encoding/json"
+
+	"github.com/sagini18/saas/internal/types"
 	"github.com/sirupsen/logrus"
 	"github.com/streadway/amqp"
 )
@@ -32,18 +35,19 @@ func PublishMessage(command string, routingKey string, commandID string) error {
 		logrus.Error("Failed to declare a queue", err)
 		return err
 	}
-	msgBody, err := json.Marshal(CommandMessage{Command: command, CommandID: commandID, RoutingKey: routingKey})
-    if err != nil {
-        return err
-    }
+	msgBody, err := json.Marshal(types.CommandMessage{Command: command, CommandID: commandID, RoutingKey: routingKey})
+	if err != nil {
+		return err
+	}
 	err = ch.Publish(
 		"",     // exchange: ""-> Messages are routed directly to the queue whose name matches the routing key.
 		q.Name, // routing key
-		fa,   // mandatory:  the server must return a message to the producer if it cannot route the message to a queue. ?=????false
+		true,   // mandatory:  the server must return a message to the producer if it cannot route the message to a queue. ?=????false
 		false,  // immediate: If false, the server will queue the message even if there are no consumers.
 		amqp.Publishing{
-			ContentType: "text/plain",
-			Body:        []byte(command),
+			ContentType:  "application/json",
+			Body:         msgBody,
+			DeliveryMode: amqp.Persistent, // make message persistent
 		})
 	if err != nil {
 		logrus.Error("Failed to publish a message", err)
