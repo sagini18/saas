@@ -118,12 +118,12 @@ func (s *server) startConsuming() {
 		for queue := range s.subscriptions {
 			go func(queue string) {
 				_, err = ch.QueueDeclare(
-					"k8s-1-command", // name
-					true,            // durable
-					false,           // delete when unused
-					false,           // exclusive
-					false,           // no-wait
-					nil,             // arguments
+					queue, // name
+					true,  // durable
+					false, // delete when unused
+					false, // exclusive
+					false, // no-wait
+					nil,   // arguments
 				)
 				if err != nil {
 					log.Fatalf("%s: %s", "Failed to declare a queue", err)
