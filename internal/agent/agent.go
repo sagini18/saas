@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"time"
 
@@ -24,8 +23,9 @@ func main() {
 	for {
 		err := runAgent(agentID, queue)
 		if err != nil {
-			log.Printf("Agent error: %v. Reconnecting in 5 seconds...", err)
+			logrus.Errorf("Agent error: %v. Reconnecting in 5 seconds...", err)
 			time.Sleep(5 * time.Second)
+			continue
 		}
 	}
 }
@@ -52,47 +52,53 @@ func runAgent(agentID string, queue string) error {
 	logrus.Info(res.Message)
 
 	// Stream commands
-	streamCtx := metadata.AppendToOutgoingContext(context.Background(), "authorization", "valid-token")
-	stream, err := client.StreamCommands(streamCtx)
-	if err != nil {
-		logrus.Errorf("could not stream: %v", err)
-		return err
-	}
-
-	initialReq := pb.InitialRequest{
-		AgentId: agentID,
-		Command: &pb.Command{Command: "why"},
-	}
-	if err := stream.Send(&initialReq); err != nil {
-		logrus.Errorf("could not send initial request: %v", err)
-		return err
-	}
-
 	for {
-		in, err := stream.Recv()
+		streamCtx := metadata.AppendToOutgoingContext(context.Background(), "authorization", "valid-token")
+		stream, err := client.StreamCommands(streamCtx)
 		if err != nil {
-			logrus.Errorf("Failed to receive a command: %v", err)
+			logrus.Errorf("could not stream: %v", err)
+			time.Sleep(5 * time.Second)
+			continue
+		}
+
+		initialReq := pb.InitialRequest{
+			AgentId: agentID,
+			Command: &pb.Command{Command: ""}, // need to delete this line
+		}
+		if err := stream.Send(&initialReq); err != nil {
+			logrus.Errorf("could not send initial request: %v", err)
 			return err
 		}
 
-		response := types.CommandResponse{
-			Response:   "command executed successfully",
-			CommandID:  in.CommandID,
-			RoutingKey: in.RoutingKey,
-		}
+		for {
+			in, err := stream.Recv()
+			if err != nil {
+				logrus.Errorf("Failed to receive a command: %v", err)
+				break // Break inner loop to reconnect the stream
+			}
 
-		// Send the response back to the server
-		respBytes, err := json.Marshal(response)
-		if err != nil {
-			logrus.Errorf("Failed to marshal response: %v", err)
-			return err
-		}
-		fmt.Println("response: ", string(respBytes))
+			response := types.CommandResponse{
+				Response:   "command executed successfully",
+				CommandID:  in.CommandID,
+				RoutingKey: in.RoutingKey,
+			}
+			logrus.Infof("Received command: %s with commandID: %s", in.Result, in.CommandID)
 
-		_, err = http.Post("http://localhost:5050/api/v1/responses", "application/json", bytes.NewBuffer(respBytes))
-		if err != nil {
-			logrus.Errorf("Failed to send response: %v", err)
-			return err
+			// Send the response back to the server
+			respBytes, err := json.Marshal(response)
+			if err != nil {
+				logrus.Errorf("Failed to marshal response: %v", err)
+				return err
+			}
+			fmt.Println(" Sending response: ", string(respBytes))
+
+			_, err = http.Post("http://localhost:5050/api/v1/responses", "application/json", bytes.NewBuffer(respBytes))
+			if err != nil {
+				logrus.Errorf("Failed to send response: %v", err)
+				return err
+			}
 		}
+		logrus.Info("Reconnecting stream in 5 seconds...")
+		time.Sleep(5 * time.Second)
 	}
 }
