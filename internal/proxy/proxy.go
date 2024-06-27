@@ -1,12 +1,15 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"log"
 	"net"
 	"sync"
 	"time"
 
+	"github.com/sagini18/saas/internal/types"
 	pb "github.com/sagini18/saas/proto"
 	"github.com/sirupsen/logrus"
 	"github.com/streadway/amqp"
@@ -139,9 +142,16 @@ func (s *server) startConsuming() {
 					return
 				}
 				for msg := range msgs {
+					var decodedMsg types.CommandMessage
+					if err := json.NewDecoder(bytes.NewReader(msg.Body)).Decode(&decodedMsg); err != nil {
+						log.Printf("Failed to decode message: %s", err)
+						msg.Nack(false, true) // requeue the message if decoding fails
+						continue
+					}
+
 					for _, agentID := range s.subscriptions[queue] {
 						if client, exists := s.clients[agentID]; exists {
-							if err := client.Send(&pb.Response{Result: string(msg.Body)}); err == nil {
+							if err := client.Send(&pb.Response{Result: decodedMsg.Command, CommandID: decodedMsg.CommandID, RoutingKey: decodedMsg.RoutingKey}); err == nil {
 								msg.Ack(false)
 							} else {
 								log.Printf("Failed to send message to client %s: %s", agentID, err)

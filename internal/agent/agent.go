@@ -74,13 +74,11 @@ func runAgent(agentID string, queue string) error {
 			logrus.Errorf("Failed to receive a command: %v", err)
 			return err
 		}
-		fmt.Println("commandId:", in.CommandID) // ❌
-		logrus.Info("Received command: ", in.Result, in.RoutingKey)
 
 		response := types.CommandResponse{
 			Response:   "command executed successfully",
-			CommandID:  in.CommandID, // ❌
-			RoutingKey: queue,
+			CommandID:  in.CommandID,
+			RoutingKey: in.RoutingKey,
 		}
 
 		// Send the response back to the server
