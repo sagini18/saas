@@ -8,9 +8,10 @@ import (
 	"github.com/sagini18/saas/internal/rabbitmq"
 	"github.com/sagini18/saas/internal/types"
 	"github.com/sirupsen/logrus"
+	"github.com/streadway/amqp"
 )
 
-func commandHandler(w http.ResponseWriter, r *http.Request) {
+func commandHandler(w http.ResponseWriter, r *http.Request, channel *amqp.Channel) {
 	var cmdMsg types.CommandMessage
 
 	err := json.NewDecoder(r.Body).Decode(&cmdMsg)
@@ -21,7 +22,7 @@ func commandHandler(w http.ResponseWriter, r *http.Request) {
 
 	logrus.Infof("Received command: %s with routing key: %s", cmdMsg.Command, cmdMsg.RoutingKey)
 
-	err = rabbitmq.PublishMessage(cmdMsg.Command, cmdMsg.RoutingKey, cmdMsg.CommandID)
+	err = rabbitmq.PublishMessage(cmdMsg.Command, cmdMsg.RoutingKey, cmdMsg.CommandID, channel)
 	if err != nil {
 		http.Error(w, "Failed to publish the message: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -32,7 +33,7 @@ func commandHandler(w http.ResponseWriter, r *http.Request) {
 	errorChan := make(chan error)
 
 	go func() {
-		res, err := rabbitmq.ConsumeResponse(cmdMsg.RoutingKey, cmdMsg.CommandID)
+		res, err := rabbitmq.ConsumeResponse(cmdMsg.RoutingKey, cmdMsg.CommandID, channel)
 		if err != nil {
 			errorChan <- err
 			return
@@ -57,24 +58,10 @@ func commandHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// func responseHandler(w http.ResponseWriter, r *http.Request) {
-// 	var respMsg types.CommandResponse
-
-// 	err := json.NewDecoder(r.Body).Decode(&respMsg)
-// 	if err != nil {
-// 		http.Error(w, "Invalid request payload", http.StatusBadRequest)
-// 		return
-// 	}
-
-// 	logrus.Infof("Received response: %s for command ID: %s with routing key: %s", respMsg.Response, respMsg.CommandID, respMsg.RoutingKey)
-
-// 	w.WriteHeader(http.StatusOK)
-// 	w.Write([]byte("Response received successfully"))
-// }
-
-func Start() {
-	http.HandleFunc("/api/v1/commands", commandHandler)
-	// http.HandleFunc("/api/v1/responses", responseHandler)
+func Start(channel *amqp.Channel) {
+	http.HandleFunc("/api/v1/commands", func(w http.ResponseWriter, r *http.Request) {
+		commandHandler(w, r, channel)
+	})
 	logrus.Info("Starting server on port 5050...")
 	if err := http.ListenAndServe(":5050", nil); err != nil {
 		logrus.Fatalf("Server failed: %s", err)

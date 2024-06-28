@@ -86,27 +86,6 @@ func runAgent(agentID string, queue string) error {
 				}
 				logrus.Infof("Sent response for commandID: %s", in.CommandID)
 			}(in.Response)
-
-			// response := types.CommandResponse{
-			// 	Response:   "command executed successfully",
-			// 	CommandID:  in.CommandID,
-			// 	RoutingKey: in.RoutingKey,
-			// }
-			// logrus.Infof("Received command: %s with commandID: %s", in.Result, in.CommandID)
-
-			// // Send the response back to the server
-			// respBytes, err := json.Marshal(response)
-			// if err != nil {
-			// 	logrus.Errorf("Failed to marshal response: %v", err)
-			// 	return err
-			// }
-			// fmt.Println(" Sending response: ", string(respBytes))
-
-			// _, err = http.Post("http://localhost:5050/api/v1/responses", "application/json", bytes.NewBuffer(respBytes))
-			// if err != nil {
-			// 	logrus.Errorf("Failed to send response: %v", err)
-			// 	return err
-			// }
 		}
 		logrus.Info("Reconnecting stream in 5 seconds...")
 		time.Sleep(5 * time.Second)
