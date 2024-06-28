@@ -60,8 +60,8 @@ func (c *proxyClient) StreamCommands(ctx context.Context, opts ...grpc.CallOptio
 }
 
 type Proxy_StreamCommandsClient interface {
-	Send(*InitialRequest) error
-	Recv() (*Response, error)
+	Send(*CommandStream) error
+	Recv() (*CommandStream, error)
 	grpc.ClientStream
 }
 
@@ -69,12 +69,12 @@ type proxyStreamCommandsClient struct {
 	grpc.ClientStream
 }
 
-func (x *proxyStreamCommandsClient) Send(m *InitialRequest) error {
+func (x *proxyStreamCommandsClient) Send(m *CommandStream) error {
 	return x.ClientStream.SendMsg(m)
 }
 
-func (x *proxyStreamCommandsClient) Recv() (*Response, error) {
-	m := new(Response)
+func (x *proxyStreamCommandsClient) Recv() (*CommandStream, error) {
+	m := new(CommandStream)
 	if err := x.ClientStream.RecvMsg(m); err != nil {
 		return nil, err
 	}
@@ -136,8 +136,8 @@ func _Proxy_StreamCommands_Handler(srv interface{}, stream grpc.ServerStream) er
 }
 
 type Proxy_StreamCommandsServer interface {
-	Send(*Response) error
-	Recv() (*InitialRequest, error)
+	Send(*CommandStream) error
+	Recv() (*CommandStream, error)
 	grpc.ServerStream
 }
 
@@ -145,12 +145,12 @@ type proxyStreamCommandsServer struct {
 	grpc.ServerStream
 }
 
-func (x *proxyStreamCommandsServer) Send(m *Response) error {
+func (x *proxyStreamCommandsServer) Send(m *CommandStream) error {
 	return x.ServerStream.SendMsg(m)
 }
 
-func (x *proxyStreamCommandsServer) Recv() (*InitialRequest, error) {
-	m := new(InitialRequest)
+func (x *proxyStreamCommandsServer) Recv() (*CommandStream, error) {
+	m := new(CommandStream)
 	if err := x.ServerStream.RecvMsg(m); err != nil {
 		return nil, err
 	}

@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 
+	"github.com/sagini18/saas/internal/rabbitmq"
 	"github.com/sagini18/saas/internal/server"
 	"github.com/sirupsen/logrus"
 )
@@ -10,6 +11,7 @@ import (
 func main() {
 	configureLogger()
 
+	rabbitmq.Start()
 	server.Start()
 }
 

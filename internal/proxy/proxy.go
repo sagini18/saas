@@ -26,6 +26,10 @@ type server struct {
 	mu            sync.Mutex
 }
 
+var (
+	ch *amqp.Channel
+)
+
 func validateToken(ctx context.Context) bool {
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
@@ -71,12 +75,36 @@ func (s *server) StreamCommands(stream pb.Proxy_StreamCommandsServer) error {
 
 	// Keep the stream open
 	for {
-		cmd, err := stream.Recv()
+		in, err := stream.Recv()
 		if err != nil {
 			return err
 		}
-		logrus.Infof("All:%s", cmd.Command)
-		logrus.Errorf("Received command: %s", cmd.Command.Command)
+		logrus.Infof("Received command : %v, CommandID: %v, RoutingKey: %v", in.Response.CommandID, in.Response.Response, in.Response.RoutingKey)
+
+		_, err = ch.QueueDeclare(
+			in.Response.RoutingKey+"-response",
+			true,
+			false,
+			false,
+			false,
+			nil,
+		)
+		if err != nil {
+			logrus.Errorf("Failed to declare a queue: %v", err)
+			continue
+		}
+
+		_ = ch.Publish(
+			"",
+			in.Response.RoutingKey+"-response",
+			false,
+			false,
+			amqp.Publishing{
+				ContentType: "application/json",
+				Body:        []byte(`{"response": "` + in.Response.Response + `", "commandID": "` + in.Response.CommandID + `", "routingKey": "` + in.Response.RoutingKey + `"}`),
+			},
+		)
+		logrus.Infof("Command response: %v added to the queue: %v", in.Response.Response, in.Response.RoutingKey+"-response")
 	}
 }
 
@@ -121,7 +149,8 @@ func (s *server) startConsuming() {
 
 func (s *server) consume(conn *amqp.Connection) {
 	for {
-		ch, err := conn.Channel()
+		var err error
+		ch, err = conn.Channel()
 		if err != nil {
 			logrus.Errorf("Failed to open a channel: %s. Retrying in 5 seconds...", err)
 			time.Sleep(5 * time.Second)
@@ -196,7 +225,7 @@ func (s *server) consumeFromQueue(ch *amqp.Channel, queue string) {
 		s.mu.Lock()
 		for _, agentID := range s.subscriptions[queue] {
 			if client, exists := s.clients[agentID]; exists {
-				if err := client.Send(&pb.Response{Result: decodedMsg.Command, CommandID: decodedMsg.CommandID, RoutingKey: decodedMsg.RoutingKey}); err == nil {
+				if err := client.Send(&pb.CommandStream{Response: &pb.Response{Response: decodedMsg.Command, CommandID: decodedMsg.CommandID, RoutingKey: decodedMsg.RoutingKey}}); err == nil {
 					logrus.Infof("Sent command: %s to agent %s", decodedMsg.Command, agentID)
 					msg.Ack(false)
 				} else {

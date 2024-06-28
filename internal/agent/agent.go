@@ -1,14 +1,9 @@
 package main
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
-	"fmt"
-	"net/http"
 	"time"
 
-	"github.com/sagini18/saas/internal/types"
 	pb "github.com/sagini18/saas/proto"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
@@ -53,17 +48,15 @@ func runAgent(agentID string, queue string) error {
 
 	// Stream commands
 	for {
-		streamCtx := metadata.AppendToOutgoingContext(context.Background(), "authorization", "valid-token")
-		stream, err := client.StreamCommands(streamCtx)
+		stream, err := client.StreamCommands(ctx)
 		if err != nil {
 			logrus.Errorf("could not stream: %v", err)
 			time.Sleep(5 * time.Second)
 			continue
 		}
 
-		initialReq := pb.InitialRequest{
+		initialReq := pb.CommandStream{
 			AgentId: agentID,
-			Command: &pb.Command{Command: ""}, // need to delete this line
 		}
 		if err := stream.Send(&initialReq); err != nil {
 			logrus.Errorf("could not send initial request: %v", err)
@@ -77,26 +70,43 @@ func runAgent(agentID string, queue string) error {
 				break // Break inner loop to reconnect the stream
 			}
 
-			response := types.CommandResponse{
-				Response:   "command executed successfully",
-				CommandID:  in.CommandID,
-				RoutingKey: in.RoutingKey,
-			}
-			logrus.Infof("Received command: %s with commandID: %s", in.Result, in.CommandID)
+			logrus.Infof("Received command: %s with commandID: %s", in.Response.Response, in.Response.CommandID)
 
-			// Send the response back to the server
-			respBytes, err := json.Marshal(response)
-			if err != nil {
-				logrus.Errorf("Failed to marshal response: %v", err)
-				return err
-			}
-			fmt.Println(" Sending response: ", string(respBytes))
+			go func(in *pb.Response) {
+				// Simulate processing the command
+				time.Sleep(2 * time.Second)
 
-			_, err = http.Post("http://localhost:5050/api/v1/responses", "application/json", bytes.NewBuffer(respBytes))
-			if err != nil {
-				logrus.Errorf("Failed to send response: %v", err)
-				return err
-			}
+				responseMsg := &pb.CommandStream{
+					AgentId:  agentID,
+					Response: &pb.Response{Response: "command executed successfully", CommandID: in.CommandID, RoutingKey: in.RoutingKey},
+				}
+
+				if err := stream.Send(responseMsg); err != nil {
+					logrus.Errorf("Failed to send response: %v", err)
+				}
+				logrus.Infof("Sent response for commandID: %s", in.CommandID)
+			}(in.Response)
+
+			// response := types.CommandResponse{
+			// 	Response:   "command executed successfully",
+			// 	CommandID:  in.CommandID,
+			// 	RoutingKey: in.RoutingKey,
+			// }
+			// logrus.Infof("Received command: %s with commandID: %s", in.Result, in.CommandID)
+
+			// // Send the response back to the server
+			// respBytes, err := json.Marshal(response)
+			// if err != nil {
+			// 	logrus.Errorf("Failed to marshal response: %v", err)
+			// 	return err
+			// }
+			// fmt.Println(" Sending response: ", string(respBytes))
+
+			// _, err = http.Post("http://localhost:5050/api/v1/responses", "application/json", bytes.NewBuffer(respBytes))
+			// if err != nil {
+			// 	logrus.Errorf("Failed to send response: %v", err)
+			// 	return err
+			// }
 		}
 		logrus.Info("Reconnecting stream in 5 seconds...")
 		time.Sleep(5 * time.Second)
